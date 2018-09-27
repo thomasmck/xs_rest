@@ -9,6 +9,10 @@ app = Flask(__name__)
 def not_found(error):
     return make_response(json.dumps({'error': 'Not found'}), 404)
 
+@app.errorhandler(500)
+def internal_error(error):
+    return make_response(json.dumps({'error': str(error)}), 500)
+
 @app.route('/VDI', methods=['GET'])
 def get_VDIs():
     # curl -X GET http://127.0.0.1:5000/VDI
@@ -35,18 +39,30 @@ def get_post_object_action(object, action):
     # curl -X POST "http://localhost:5000/action/VDI/get_SR?tom=test"
     # curl -X POST "http://localhost:5000/action/VDI/get_SR?ref=OpaqueRef:006182f6-9efd-4240-96c4-15ed2adf2257"
 
-    # Need to work out whether params should be dict or list of params
-    action_param_type = {"set_name_label": "list"}
     arg = request.args
-    if len(arg) == 1:
-        options = request.args.get('ref')
-    else:
-        options = {}
+    print("ARGS: {}".format(arg))
+    try:
+        options = ()
         for key, value in arg.items():
-            options[key] = value
+            print("VALUE: {}".format(value))
+            #tuple_value = (value,)
+            options += (str(value),)
+        print("ACTION: {}".format(options))
+        objects = getattr(session.xenapi, object)
+        action = getattr(objects, action)(*options)
+        # If this fails as it was looking for dict try other
 
-    objects = getattr(session.xenapi, object)
-    action = getattr(objects, action)(options)
+    except Exception as e:
+        print("ERROR_ERROR: {}".format(e))
+        if ("bad __structure" or "PARAMETER_COUNT_MISMATCH") in str(e):
+            options = {}
+            for key, value in arg.items():
+                options[key] = value
+            print("ACTION: {}".format(options))
+            objects = getattr(session.xenapi, object)
+            action = getattr(objects, action)(options)
+
+    print("ACTION: {}".format(action))
     return jsonify({str(object): action})
 
 
